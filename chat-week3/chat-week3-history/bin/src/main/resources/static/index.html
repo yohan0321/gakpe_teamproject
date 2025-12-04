@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>STOMP Chat — Week3 (히스토리 + REST)</title>
+  <style>
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Apple SD Gothic Neo','Noto Sans KR',sans-serif; margin:24px; }
+    #log { border:1px solid #ccc; padding:8px; height:320px; overflow:auto; background:#fafafa; white-space:pre-wrap; }
+    input { padding:6px 8px; margin:4px 0; }
+    button { padding:6px 10px; margin-left:6px; cursor:pointer; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    #error { color:#c00; min-height:1.2em; }
+  </style>
+</head>
+<body>
+  <h2>WebSocket(STOMP) Chat — Week3</h2>
+
+  <div class="row">
+    <label>방 ID: <input id="roomId" value="room1"/></label>
+    <label>닉네임: <input id="sender" value="userA"/></label>
+    <button onclick="connect()">연결 & 히스토리 로드</button>
+    <button onclick="disconnect()">연결 해제</button>
+    <button onclick="join()">입장 알림</button>
+  </div>
+
+  <div class="row">
+    <input id="content" placeholder="메시지 입력" onkeydown="if(event.key==='Enter') send();" style="width:320px;"/>
+    <button onclick="send()">전송</button>
+  </div>
+
+  <div id="error"></div>
+  <pre id="log"></pre>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <script>
+    let stompClient;
+    let roomSubscription;
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function showError(msg) {
+      document.getElementById('error').textContent = msg || '';
+    }
+
+    async function loadHistory(roomId) {
+      try {
+        const res = await fetch('/api/messages?roomId=' + encodeURIComponent(roomId) + '&limit=50');
+        if (!res.ok) {
+          showError('히스토리 로드 실패');
+          return;
+        }
+        const list = await res.json();
+        document.getElementById('log').textContent = ''; // 초기화
+        for (const msg of list) {
+          const hasValidTs = typeof msg.timestamp === 'number' && msg.timestamp > 0;
+          const time = hasValidTs ? new Date(msg.timestamp).toLocaleTimeString() : '';
+          const prefix = time ? '[' + time + '] ' : '';
+          const sender = msg.sender || 'SYSTEM';
+          const content = msg.content || '';
+          log(prefix + sender + ': ' + content);
+        }
+      } catch (e) {
+        console.error(e);
+        showError('히스토리 로드 중 오류');
+      }
+    }
+
+    function connect() {
+      if (stompClient && stompClient.connected) { log('이미 연결되어 있음'); return; }
+
+      const roomId = document.getElementById('roomId').value.trim();
+      const sender = document.getElementById('sender').value.trim();
+      if (!roomId || !sender) {
+        alert('방 ID와 닉네임을 모두 입력하세요.');
+        return;
+      }
+
+      const socket = new SockJS('/ws');
+      stompClient = Stomp.over(socket);
+      // stompClient.debug = null;
+
+      stompClient.connect({}, async () => {
+        showError('');
+        await loadHistory(roomId);
+        subscribeRoom();
+        log('연결됨');
+      }, (err) => {
+        console.error('STOMP 연결 실패:', err);
+        showError('서버와의 연결에 실패했습니다.');
+      });
+    }
+
+    function subscribeRoom() {
+      const roomId = document.getElementById('roomId').value.trim();
+      if (!roomId) return;
+
+      if (roomSubscription) {
+        roomSubscription.unsubscribe();
+        roomSubscription = null;
+      }
+
+      roomSubscription = stompClient.subscribe('/topic/room/' + roomId, (frame) => {
+        const msg = JSON.parse(frame.body);
+        const hasValidTs = typeof msg.timestamp === 'number' && msg.timestamp > 0;
+        const time = hasValidTs ? new Date(msg.timestamp).toLocaleTimeString() : '';
+        const prefix = time ? '[' + time + '] ' : '';
+        log(prefix + (msg.sender || 'SYSTEM') + ': ' + (msg.content || ''));
+      });
+    }
+
+    function disconnect() {
+      if (stompClient && stompClient.connected) {
+        if (roomSubscription) roomSubscription.unsubscribe();
+        stompClient.disconnect(() => {
+          log('연결 해제됨');
+        });
+      }
+      roomSubscription = null;
+      stompClient = null;
+    }
+
+    function join() {
+      if (!stompClient || !stompClient.connected) return alert('먼저 연결하세요');
+      const roomId = document.getElementById('roomId').value.trim();
+      const sender = document.getElementById('sender').value.trim();
+      if (!roomId || !sender) {
+        showError('방 ID와 닉네임을 모두 입력하세요.');
+        return;
+      }
+      stompClient.send('/app/chat.join', {}, JSON.stringify({ type: 'ENTER', roomId, sender }));
+    }
+
+    function send() {
+      if (!stompClient || !stompClient.connected) return alert('먼저 연결하세요');
+      const roomId = document.getElementById('roomId').value.trim();
+      const sender = document.getElementById('sender').value.trim();
+      const content = document.getElementById('content').value.trim();
+      if (!roomId || !sender) {
+        showError('방 ID와 닉네임을 모두 입력하세요.');
+        return;
+      }
+      if (!content) {
+        showError('메시지를 입력하세요.');
+        return;
+      }
+
+      document.getElementById('content').value = '';
+      stompClient.send('/app/chat.send', {}, JSON.stringify({ type: 'TALK', roomId, sender, content }));
+      showError('');
+    }
+  </script>
+</body>
+</html>
