@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Week5</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <style>
+    :root{
+      --bg0:#0b1020;
+      --bg1:#0f172a;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.08);
+      --stroke:rgba(255,255,255,.10);
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --accent:#60a5fa;
+      --accent2:#a78bfa;
+      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --radius: 18px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 15% 20%, rgba(96,165,250,.18), transparent 60%),
+        radial-gradient(900px 500px at 85% 10%, rgba(167,139,250,.16), transparent 55%),
+        radial-gradient(800px 500px at 70% 85%, rgba(34,197,94,.10), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+    }
+
+    .shell{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 22px 18px 26px;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+    }
+
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    .brand h1{
+      margin:0;
+      font-size: 20px;
+      letter-spacing: .2px;
+      font-weight: 720;
+      line-height: 1.15;
+    }
+    .brand p{
+      margin:0;
+      color:var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .status{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      backdrop-filter: blur(10px);
+    }
+    .dot{
+      width:10px; height:10px; border-radius:999px;
+      background: rgba(156,163,175,.9);
+      box-shadow: 0 0 0 6px rgba(156,163,175,.10);
+    }
+    .dot.on{
+      background: rgba(34,197,94,.95);
+      box-shadow: 0 0 0 6px rgba(34,197,94,.12);
+    }
+    .status span{
+      font-size: 13px;
+      color: var(--muted);
+      user-select:none;
+    }
+
+    .grid{
+      flex:1;
+      display:grid;
+      grid-template-columns: 340px 1fr;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .card{
+      border-radius: var(--radius);
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      overflow:hidden;
+    }
+
+    .card .hd{
+      padding: 14px 14px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+    }
+
+    .card .hd .ttl{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      min-width:0;
+    }
+
+    .card .hd .ttl b{
+      font-size: 14px;
+      letter-spacing: .2px;
+    }
+    .card .hd .ttl small{
+      font-size: 12px;
+      color: var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 240px;
+    }
+
+    .card .bd{
+      padding: 14px;
+      min-height: 0;
+    }
+
+    .stack{ display:flex; flex-direction:column; gap:12px; }
+
+    label{
+      font-size: 12px;
+      color: var(--muted);
+      display:block;
+      margin-bottom: 6px;
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    .inp, select{
+      width:100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(15,23,42,.35);
+      color: var(--text);
+      outline:none;
+      transition: border .15s ease, background .15s ease, transform .05s ease;
+    }
+    .inp::placeholder{ color: rgba(156,163,175,.65); }
+    .inp:focus, select:focus{
+      border-color: rgba(96,165,250,.55);
+      background: rgba(15,23,42,.55);
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      cursor:pointer;
+      user-select:none;
+      transition: transform .05s ease, background .15s ease, border .15s ease, opacity .15s ease;
+      font-weight: 650;
+      font-size: 13px;
+      white-space:nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); }
+    .btn:active{ transform: translateY(1px); }
+    .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(96,165,250,.92), rgba(167,139,250,.88));
+      border-color: rgba(255,255,255,.10);
+      color: #0b1020;
+    }
+    .btn.primary:hover{ filter: brightness(1.03); }
+    .btn.ghost{
+      background: transparent;
+      border-color: rgba(255,255,255,.14);
+    }
+    .btn.danger{
+      background: rgba(239,68,68,.12);
+      border-color: rgba(239,68,68,.22);
+      color: #fecaca;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 12px;
+      user-select:none;
+    }
+
+    .kv{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .participants{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      padding-top: 2px;
+    }
+    .chip{
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      font-size: 12px;
+      color: rgba(229,231,235,.92);
+    }
+
+    .hint{
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* Chat area */
+    .chat{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .chatbox{
+      flex:1;
+      min-height:0;
+      padding: 14px;
+      overflow:auto;
+      background:
+        radial-gradient(900px 500px at 30% 0%, rgba(96,165,250,.07), transparent 55%),
+        radial-gradient(900px 500px at 90% 0%, rgba(167,139,250,.06), transparent 55%);
+    }
+
+    .msg{
+      display:flex;
+      gap:10px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      background: transparent;
+      margin-bottom: 10px;
+    }
+
+    .msg:hover{
+      border-color: rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+    }
+
+    .avatar{
+      width:34px; height:34px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color: rgba(229,231,235,.9);
+      font-weight: 800;
+      font-size: 12px;
+      flex:0 0 auto;
+    }
+
+    .bubble{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+      flex:1;
+    }
+
+    .meta{
+      display:flex;
+      align-items:baseline;
+      gap:8px;
+      min-width:0;
+    }
+    .meta b{
+      font-size: 13px;
+      letter-spacing: .2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 240px;
+    }
+    .meta span{
+      font-size: 12px;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+
+    .text{
+      font-size: 14px;
+      line-height: 1.45;
+      color: rgba(229,231,235,.96);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .system{
+      justify-content:center;
+    }
+    .system .avatar{ display:none; }
+    .system .bubble{
+      align-items:center;
+      text-align:center;
+      max-width: 620px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      border-radius: 999px;
+    }
+    .system .meta b{ display:none; }
+    .system .meta span{ display:none; }
+    .system .text{
+      color: rgba(229,231,235,.85);
+      font-size: 13px;
+    }
+
+    .typing{
+      height: 18px;
+      padding: 0 14px 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .composer{
+      display:flex;
+      gap:10px;
+      padding: 14px;
+      border-top: 1px solid rgba(255,255,255,.06);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.04));
+    }
+    .composer .inp{
+      flex:1;
+      padding: 12px 12px;
+      border-radius: 14px;
+    }
+
+    .kbrd{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      color: var(--muted);
+      font-size: 12px;
+      user-select:none;
+    }
+    .kbrd kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      color: rgba(229,231,235,.9);
+    }
+
+    @media (max-width: 980px){
+      body{ overflow:auto; }
+      .shell{ height:auto; }
+      .grid{ grid-template-columns: 1fr; }
+      .status{ display:none; }
+      .card{ box-shadow: 0 16px 40px rgba(0,0,0,.35); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <h1>Real-time Chat</h1>
+        <p>Week 5 Final: history, participants, session nickname, typing indicator</p>
+      </div>
+
+      <div class="status" id="statusPill" aria-live="polite">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Left: Controls -->
+      <section class="card">
+        <div class="hd">
+          <div class="ttl">
+            <b>Controls</b>
+            <small id="ctrlSub">Room and identity</small>
+          </div>
+          <span class="pill" id="roomPill">room1</span>
+        </div>
+        <div class="bd">
+          <div class="stack">
+
+            <div class="field">
+              <label for="roomId">Room</label>
+              <select id="roomId" class="inp">
+                <option value="room1">room1</option>
+                <option value="room2">room2</option>
+                <option value="room3">room3</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="username">Nickname</label>
+              <input id="username" class="inp" placeholder="예: userA" autocomplete="off" />
+              <div class="hint">로그인 후 연결하면 닉네임이 세션에 저장됩니다. 로그인 없이도 연결은 가능합니다.</div>
+            </div>
+
+            <div class="row">
+              <button class="btn primary" id="btnLogin">Login</button>
+              <button class="btn" id="btnConnect">Connect</button>
+              <button class="btn danger" id="btnDisconnect" disabled>Disconnect</button>
+            </div>
+
+            <div class="card" style="box-shadow:none;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);">
+              <div class="hd" style="background:transparent;border-bottom:1px solid rgba(255,255,255,.06);">
+                <div class="ttl">
+                  <b>Participants</b>
+                  <small id="participantsMeta">0 online</small>
+                </div>
+              </div>
+              <div class="bd" style="padding:12px 14px 14px;">
+                <div class="participants" id="participantsChips"></div>
+                <div class="hint" style="margin-top:10px;">참가자 목록은 2초마다 갱신됩니다.</div>
+              </div>
+            </div>
+
+            <div class="kbrd">
+              <span>Send</span>
+              <kbd>Enter</kbd>
+              <span>Typing indicator is automatic</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Chat -->
+      <section class="card chat">
+        <div class="hd">
+          <div class="ttl">
+            <b>Conversation</b>
+            <small id="chatSub">History will load after connect</small>
+          </div>
+          <span class="pill" id="mePill">anonymous</span>
+        </div>
+
+        <div class="chatbox" id="log" aria-live="polite"></div>
+        <div class="typing" id="typing"></div>
+
+        <div class="composer">
+          <input id="message" class="inp" placeholder="메시지를 입력하세요" autocomplete="off" />
+          <button class="btn primary" id="btnSend">Send</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+  let stompClient = null;
+  let participantsTimer = null;
+  let typingTimer = null;
+  let lastTypingSentAt = 0;
+
+  const els = {
+    roomId: document.getElementById('roomId'),
+    username: document.getElementById('username'),
+    message: document.getElementById('message'),
+    log: document.getElementById('log'),
+    typing: document.getElementById('typing'),
+    btnLogin: document.getElementById('btnLogin'),
+    btnConnect: document.getElementById('btnConnect'),
+    btnDisconnect: document.getElementById('btnDisconnect'),
+    btnSend: document.getElementById('btnSend'),
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    roomPill: document.getElementById('roomPill'),
+    mePill: document.getElementById('mePill'),
+    chatSub: document.getElementById('chatSub'),
+    participantsChips: document.getElementById('participantsChips'),
+    participantsMeta: document.getElementById('participantsMeta')
+  };
+
+  function setConnected(isOn){
+    els.statusDot.classList.toggle('on', isOn);
+    els.statusText.textContent = isOn ? 'Connected' : 'Disconnected';
+    els.btnDisconnect.disabled = !isOn;
+    els.btnConnect.disabled = isOn;
+    els.btnSend.disabled = !isOn;
+  }
+
+  function escapeHtml(s){
+    return (s ?? '').toString()
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;');
+  }
+
+  function initials(name){
+    const t = (name || 'A').trim();
+    if (!t) return 'A';
+    const parts = t.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+    return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+  }
+
+  function appendMessage({sender, content, timestamp, kind}){
+    const ts = (typeof timestamp === 'number' && timestamp > 0) ? new Date(timestamp).toLocaleTimeString() : '';
+    const isSystem = (kind === 'system');
+    const row = document.createElement('div');
+    row.className = 'msg' + (isSystem ? ' system' : '');
+
+    if (!isSystem){
+      const av = document.createElement('div');
+      av.className = 'avatar';
+      av.textContent = initials(sender);
+      row.appendChild(av);
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const b = document.createElement('b');
+    b.textContent = sender || 'SYSTEM';
+    const s = document.createElement('span');
+    s.textContent = ts;
+    meta.appendChild(b);
+    meta.appendChild(s);
+
+    const text = document.createElement('div');
+    text.className = 'text';
+    text.textContent = content || '';
+
+    bubble.appendChild(meta);
+    bubble.appendChild(text);
+
+    row.appendChild(bubble);
+    els.log.appendChild(row);
+    els.log.scrollTop = els.log.scrollHeight;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      ...options
+    });
+    return res;
+  }
+
+  async function login() {
+    const username = els.username.value.trim();
+    const res = await api('/api/login', { method: 'POST', body: JSON.stringify({ username }) });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || '로그인 실패'); return; }
+    appendMessage({ sender: 'SYSTEM', content: '로그인 완료: ' + data.username, timestamp: Date.now(), kind:'system' });
+    els.mePill.textContent = data.username;
+  }
+
+  async function getMe() {
+    const res = await api('/api/me', { method: 'GET' });
+    const data = await res.json();
+    return (data.username || '').trim();
+  }
+
+  async function loadHistory(roomId) {
+    els.log.innerHTML = '';
+    els.chatSub.textContent = 'Loading history...';
+    const res = await api('/api/messages?roomId=' + encodeURIComponent(roomId) + '&limit=50', { method: 'GET' });
+    if (!res.ok) {
+      els.chatSub.textContent = 'History load failed (HTTP ' + res.status + ')';
+      appendMessage({ sender:'SYSTEM', content:'히스토리 로드 실패 (HTTP ' + res.status + ')', timestamp: Date.now(), kind:'system' });
+      return;
+    }
+    const list = await res.json();
+    for (const msg of list) {
+      appendMessage({
+        sender: msg.sender || 'SYSTEM',
+        content: msg.content || '',
+        timestamp: msg.timestamp,
+        kind: (msg.type === 'ENTER' || msg.type === 'LEAVE') ? 'system' : 'chat'
+      });
+    }
+    els.chatSub.textContent = 'History loaded';
+  }
+
+  function renderParticipants(list){
+    els.participantsChips.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0){
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.textContent = '없음';
+      els.participantsChips.appendChild(chip);
+      els.participantsMeta.textContent = '0 online';
+      return;
+    }
+    for (const name of list){
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.textContent = name;
+      els.participantsChips.appendChild(chip);
+    }
+    els.participantsMeta.textContent = list.length + ' online';
+  }
+
+  async function refreshParticipants(roomId) {
+    const res = await api('/api/participants?roomId=' + encodeURIComponent(roomId), { method: 'GET' });
+    if (!res.ok) return;
+    const list = await res.json();
+    renderParticipants(list);
+  }
+
+  function startParticipantsPolling(roomId) {
+    if (participantsTimer) clearInterval(participantsTimer);
+    refreshParticipants(roomId);
+    participantsTimer = setInterval(() => refreshParticipants(roomId), 2000);
+  }
+
+  function connect() {
+    const roomId = els.roomId.value;
+    els.roomPill.textContent = roomId;
+
+    const sock = new SockJS('/ws-stomp');
+    stompClient = Stomp.over(sock);
+    stompClient.debug = null;
+
+    getMe().then(sessionUser => {
+      const inputUser = els.username.value.trim();
+      const username = sessionUser || inputUser || ('user' + Math.floor(Math.random()*10000));
+      els.username.value = username;
+      els.mePill.textContent = username;
+
+      stompClient.connect(
+        { 'X-ROOMID': roomId, 'X-USERNAME': username },
+        function(frame) {
+          setConnected(true);
+          appendMessage({ sender:'SYSTEM', content:'Connected', timestamp: Date.now(), kind:'system' });
+          loadHistory(roomId);
+          startParticipantsPolling(roomId);
+
+		  stompClient.subscribe('/topic/room/' + roomId, function(message) {
+		    const msg = JSON.parse(message.body);
+		    const ts = msg.timestamp || Date.now();
+
+		    if (msg.type === 'ENTER') {
+		      appendMessage({
+		        sender: 'SYSTEM',
+		        content: (msg.sender || '누군가') + ' 입장',
+		        timestamp: ts,
+		        kind: 'system'
+		      });
+		      return;
+		    }
+
+		    if (msg.type === 'LEAVE') {
+		      appendMessage({
+		        sender: 'SYSTEM',
+		        content: (msg.sender || '누군가') + ' 퇴장',
+		        timestamp: ts,
+		        kind: 'system'
+		      });
+		      return;
+		    }
+
+		    // TALK 등 일반 메시지
+		    appendMessage({
+		      sender: msg.sender || 'SYSTEM',
+		      content: msg.content || '',
+		      timestamp: ts,
+		      kind: 'chat'
+		    });
+		  });
+
+
+
+
+          stompClient.subscribe('/topic/typing/' + roomId, function(message) {
+            const t = JSON.parse(message.body);
+            if (!t || !t.sender) return;
+            if (t.sender === username) return;
+            if (t.typing) {
+              els.typing.textContent = t.sender + ' 입력 중...';
+              if (typingTimer) clearTimeout(typingTimer);
+              typingTimer = setTimeout(() => { els.typing.textContent = ''; }, 1500);
+            } else {
+              els.typing.textContent = '';
+            }
+          });
+
+          stompClient.send('/pub/chat.message', {}, JSON.stringify({
+            roomId, sender: username, content: '', type: 'ENTER', timestamp: Date.now()
+          }));
+        },
+        function(error){
+          setConnected(false);
+          appendMessage({ sender:'SYSTEM', content:'Connect failed', timestamp: Date.now(), kind:'system' });
+        }
+      );
+    });
+  }
+
+  function disconnect() {
+    const roomId = els.roomId.value;
+    const username = els.username.value.trim() || 'anonymous';
+
+    try {
+      if (stompClient && stompClient.connected) {
+        stompClient.send('/pub/chat.message', {}, JSON.stringify({
+          roomId, sender: username, content: '', type: 'LEAVE', timestamp: Date.now()
+        }));
+      }
+    } catch (e) {}
+
+    if (participantsTimer) { clearInterval(participantsTimer); participantsTimer = null; }
+    if (stompClient) stompClient.disconnect(() => {
+      appendMessage({ sender:'SYSTEM', content:'Disconnected', timestamp: Date.now(), kind:'system' });
+    });
+    stompClient = null;
+    setConnected(false);
+    els.typing.textContent = '';
+  }
+
+  function sendMessage() {
+    const roomId = els.roomId.value;
+    const sender = els.username.value.trim() || 'anonymous';
+    const content = els.message.value;
+
+    if (!stompClient || !stompClient.connected) { alert('먼저 연결하세요'); return; }
+    if (!content.trim()) return;
+
+    stompClient.send('/pub/chat.message', {}, JSON.stringify({
+      roomId, sender, content, type: 'TALK', timestamp: Date.now()
+    }));
+
+    els.message.value = '';
+    sendTyping(false);
+  }
+
+  function sendTyping(isTyping) {
+    if (!stompClient || !stompClient.connected) return;
+    const now = Date.now();
+    if (isTyping && now - lastTypingSentAt < 300) return;
+    lastTypingSentAt = now;
+
+    const roomId = els.roomId.value;
+    const sender = els.username.value.trim() || 'anonymous';
+    stompClient.send('/pub/chat.typing', {}, JSON.stringify({
+      roomId, sender, typing: isTyping, timestamp: now
+    }));
+  }
+
+  els.btnLogin.addEventListener('click', login);
+  els.btnConnect.addEventListener('click', connect);
+  els.btnDisconnect.addEventListener('click', disconnect);
+  els.btnSend.addEventListener('click', sendMessage);
+
+  els.message.addEventListener('input', () => sendTyping(true));
+  els.message.addEventListener('blur', () => sendTyping(false));
+  els.message.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  els.roomId.addEventListener('change', () => {
+    els.roomPill.textContent = els.roomId.value;
+  });
+
+  // initial state
+  setConnected(false);
+  renderParticipants([]);
+  getMe().then(u => { if (u) { els.username.value = u; els.mePill.textContent = u; } });
+</script>
+</body>
+</html>
